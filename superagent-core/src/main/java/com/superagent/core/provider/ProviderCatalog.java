@@ -99,7 +99,8 @@ public final class ProviderCatalog {
             // (qoderclicn), not the documented qodercn dispatcher: that one hands the command to the Qoder IDE
             // when it finds one, which is no use for a headless run.
             npmEntry("qoder", "Qoder CN（阿里）", "qoderclicn", true, "@qodercn-ai/qoderclicn", "20.18.1", true,
-                    List.of(), new Access(OTHER, null, "QODERCN_PERSONAL_ACCESS_TOKEN", null)));
+                    // The key's address, when set, is an enterprise Dedicated instance (https://<name>.vpc.qoder.com.cn).
+                    List.of(), new Access(OTHER, null, "QODERCN_PERSONAL_ACCESS_TOKEN", "QODERCN_VPC_ENDPOINT")));
 
     public static List<Entry> all() {
         return ENTRIES;

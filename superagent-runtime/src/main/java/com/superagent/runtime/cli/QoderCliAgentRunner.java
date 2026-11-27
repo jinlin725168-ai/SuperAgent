@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.superagent.core.chat.AgentRunRequest;
 import com.superagent.core.chat.AgentType;
+import com.superagent.core.chat.RunCredential;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -36,6 +37,29 @@ public class QoderCliAgentRunner extends JsonLineCliRunner {
     public static final String PAT_ENV = "QODERCN_PERSONAL_ACCESS_TOKEN";
     /** The CN CLI's user config root; pointed at an isolated directory so the operator's own stays untouched. */
     public static final String CONFIG_DIR_ENV = "QODERCN_CONFIG_DIR";
+    /**
+     * An enterprise Dedicated (专属版) organization's own instance. Its tokens only authenticate there: without this
+     * the CLI asks the public gateway, which rejects them. The CLI takes the instance name or its full domain.
+     */
+    public static final String VPC_ENV = "QODERCN_VPC_ENDPOINT";
+    /** The domain a Dedicated instance lives under: {@code <instance>.vpc.qoder.com.cn}. */
+    public static final String VPC_DOMAIN = ".vpc.qoder.com.cn";
+
+    /**
+     * What every Qoder call needs: the token, and the Dedicated instance when the key's address names one. Shared by
+     * runs, the model list and the key check, so they never disagree about where a token is sent.
+     */
+    public static Map<String, String> credentialEnv(RunCredential credential) {
+        Map<String, String> env = new HashMap<>();
+        env.put("NO_BROWSER", "1");   // a missing token must fail the run, not wait for a browser
+        if (credential != null) {
+            env.put(PAT_ENV, credential.apiKey());
+            if (credential.baseUrl() != null && !credential.baseUrl().isBlank()) {
+                env.put(VPC_ENV, credential.baseUrl().strip());
+            }
+        }
+        return env;
+    }
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(QoderCliAgentRunner.class);
@@ -89,11 +113,7 @@ public class QoderCliAgentRunner extends JsonLineCliRunner {
 
     @Override
     protected Map<String, String> environment(AgentRunRequest request) throws IOException {
-        Map<String, String> env = new HashMap<>();
-        env.put("NO_BROWSER", "1");   // a missing token must fail the run, not wait for a browser
-        if (request.credential() != null) {
-            env.put(PAT_ENV, request.credential().apiKey());
-        }
+        Map<String, String> env = credentialEnv(request.credential());
         Path config = configDir(request);
         Files.createDirectories(config);
         env.put(CONFIG_DIR_ENV, config.toString());

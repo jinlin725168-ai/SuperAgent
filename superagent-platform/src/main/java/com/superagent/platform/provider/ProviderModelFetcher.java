@@ -210,18 +210,31 @@ public class ProviderModelFetcher {
         }
         Path bin = probe.findBinary("qoderclicn").orElseThrow(() -> new IOException("qoderclicn is not installed"));
         java.util.Map<String, String> env = qoderEnv(credential);
-        String out = run(List.of(bin.toString(), "--list-models"), 60, env);
+        String out;
+        try {
+            out = run(List.of(bin.toString(), "--list-models"), 60, env);
+        } catch (IOException e) {
+            throw qoderFailure(e);
+        }
         return new Result(qoderModels(out), "qoderclicn --list-models");
     }
 
-    /** The CN CLI's variables: the personal access token is the key; without it the CLI waits for a browser. */
-    static java.util.Map<String, String> qoderEnv(com.superagent.core.chat.RunCredential credential) {
-        java.util.Map<String, String> env = new java.util.HashMap<>();
-        env.put("NO_BROWSER", "1");
-        if (credential != null) {
-            env.put(QoderCliAgentRunner.PAT_ENV, credential.apiKey());
+    /**
+     * A token Qoder refused, said in the user's terms. The CLI's own text tells a shell user to unset the variable
+     * and restart, which means nothing here: the token is the one added on the API Key page.
+     */
+    static IOException qoderFailure(IOException e) {
+        String msg = e.getMessage() == null ? "" : e.getMessage();
+        if (!msg.contains("Failed to authenticate") && !msg.contains("was rejected")) {
+            return e;
         }
-        return env;
+        return new IOException("Qoder 拒绝了这个令牌：确认它是 Qoder CN 的个人访问令牌（企业版在企业控制台生成，权限选"
+                + "「Qoder CN-开发者-只读」），没有过期或被收回；企业专属版要在这个 Key 的访问地址里填组织控制台的地址"
+                + "（https://<实例名>" + QoderCliAgentRunner.VPC_DOMAIN + "）。换一个新令牌后，删掉这个 Key 再添加。", e);
+    }
+
+    static java.util.Map<String, String> qoderEnv(com.superagent.core.chat.RunCredential credential) {
+        return QoderCliAgentRunner.credentialEnv(credential);
     }
 
     /**

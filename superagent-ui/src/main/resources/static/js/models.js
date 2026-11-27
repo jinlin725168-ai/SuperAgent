@@ -719,7 +719,8 @@ function openCredentialForm(c) {
   cel2.label.value = c ? c.label : "";
   cel2.url.value = c ? c.baseUrl || "" : "";
   const official = (credList.find(x => x.defaultBaseUrl) || {}).defaultBaseUrl;
-  cel2.url.placeholder = official ? L("cred.fUrlPhDefault", { url: official }) : L("cred.fUrlPh");
+  cel2.url.placeholder = credProviderKey === "qoder" ? L("cred.fUrlPhQoder")
+    : official ? L("cred.fUrlPhDefault", { url: official }) : L("cred.fUrlPh");
   cel2.key.value = "";
   cel2.key.placeholder = c ? L("cred.keepKey", { hint: c.keyHint }) : "";
   cel2.key.required = !c;

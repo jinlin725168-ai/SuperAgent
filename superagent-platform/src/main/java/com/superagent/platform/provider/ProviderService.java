@@ -490,7 +490,9 @@ public class ProviderService {
         } catch (IOException e) {
             fetched = null;
             error = e.getMessage();
-            log.warn("provider {} model list fetch failed: {}", entry.key(), e.getMessage());
+            // The cause is the CLI's own words, which a friendlier message on top would otherwise hide from the log.
+            log.warn("provider {} model list fetch failed: {}{}", entry.key(), e.getMessage(),
+                    e.getCause() == null ? "" : " (cause: " + e.getCause().getMessage() + ")");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return p;

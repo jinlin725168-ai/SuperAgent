@@ -210,4 +210,39 @@ class CredentialServiceTest {
         ProviderCredential checked = svc.check(pool.find(added.id()).orElseThrow());
         assertThat(checked.status()).isEqualTo(ProviderCredential.OK);
     }
+
+    @Test
+    void aRejectedTokenIsMarkedFailingBeforeAnyModelIsListedAndRunsAndModelsMoveToTheNextToken() {
+        InMemoryPool pool = new InMemoryPool();
+        ModelProviderStore providers = mock(ModelProviderStore.class);
+        when(providers.findByKey(anyString())).thenReturn(Optional.empty()); // no model list yet
+        Set<String> rejected = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        rejected.add("pt-rejected-000001");
+        FakeProbe probe = new FakeProbe(tmp) {
+            @Override public void checkKey(String key, String model, RunCredential c) throws IOException {
+                if (rejected.contains(c.apiKey())) {
+                    throw new IOException("Failed to authenticate: the token was rejected");
+                }
+            }
+        };
+        CredentialService svc = new CredentialService(pool, providers,
+                new SecretCipher("", tmp.resolve("secret.key").toString()), probe, null);
+
+        // Saving: the check that follows marks the refused token, and runs move on to the next one.
+        CredentialDto bad = svc.add("qoder", new CredentialRequests.Save("bad", "", "pt-rejected-000001", false, null));
+        CredentialDto mine = svc.add("qoder", new CredentialRequests.Save("mine", "", "pt-valid-0000000002", false, null));
+        CredentialDto spare = svc.add("qoder", new CredentialRequests.Save("spare", "", "pt-valid-0000000003", false, null));
+        svc.awaitChecks();
+        assertThat(pool.find(bad.id()).orElseThrow().status()).isEqualTo(ProviderCredential.ERROR);
+        assertThat(pool.find(bad.id()).orElseThrow().lastError()).contains("rejected");
+        assertThat(svc.current("qoder").id()).isEqualTo(mine.id());
+
+        // Revoked later and checked by hand: the model list follows the token now in use.
+        List<String> switched = new java.util.concurrent.CopyOnWriteArrayList<>();
+        svc.onSwitch("test", switched::add);
+        rejected.add("pt-valid-0000000002");
+        assertThat(svc.checkNow("qoder", mine.id()).status()).isEqualTo(ProviderCredential.ERROR);
+        assertThat(svc.current("qoder").id()).isEqualTo(spare.id());
+        assertThat(switched).containsExactly("qoder");
+    }
 }

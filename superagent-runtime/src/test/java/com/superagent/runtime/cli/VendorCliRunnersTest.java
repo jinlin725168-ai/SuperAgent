@@ -234,6 +234,12 @@ class VendorCliRunnersTest {
                 .containsEntry("NO_BROWSER", "1");
         assertThat(String.join(" ", cmd)).doesNotContain("sk-test");
 
+        // A Dedicated instance is the key's address; without one the CLI keeps its public endpoints.
+        assertThat(QoderCliAgentRunner.credentialEnv(new RunCredential("c1", "https://acme.vpc.qoder.com.cn", "pt", false)))
+                .containsEntry(QoderCliAgentRunner.VPC_ENV, "https://acme.vpc.qoder.com.cn");
+        assertThat(QoderCliAgentRunner.credentialEnv(new RunCredential("c1", null, "pt", false)))
+                .doesNotContainKey(QoderCliAgentRunner.VPC_ENV);
+
         // A resumed turn keeps the CLI's own session; a tool allowlist is the CLI's --allowed-tools (comma-separated).
         AgentRunRequest next = new AgentRunRequest("s1", "cli-sess", "/tmp", "hi", "m",
                 List.of("Read", "Edit"), false, null, "be brief", List.of(), null,
