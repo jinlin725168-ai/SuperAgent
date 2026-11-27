@@ -401,7 +401,11 @@ public class ProviderInferenceProbe {
         }
         Path bin = probe.findBinary("qoderclicn").orElseThrow(() -> new IOException("qoderclicn is not installed"));
         java.util.Map<String, String> env = ProviderModelFetcher.qoderEnv(credential);
-        run(List.of(bin.toString(), "--list-models"), null, env);   // the token: a non-zero exit means it is not accepted
+        try {
+            run(List.of(bin.toString(), "--list-models"), null, env);   // the token: a non-zero exit means it is not accepted
+        } catch (IOException e) {
+            throw ProviderModelFetcher.qoderFailure(e);
+        }
         if (modelId == null) {
             return null;
         }

@@ -61,4 +61,23 @@ class ProviderInferenceProbeTest {
         assertThat(ProviderInferenceProbe.modelGone(429,
                 "{\"error\":{\"message\":\"rate limit exceeded\"}}")).isFalse();
     }
+
+    @Test
+    void aTokenQoderRejectsIsReportedAsTheKeyToReplaceNotAsAVariableToUnset() {
+        java.io.IOException rejected = ProviderModelFetcher.qoderFailure(new java.io.IOException(
+                "--list-models exited with 1: Failed to authenticate: The QODERCN_PERSONAL_ACCESS_TOKEN environment "
+                        + "variable contains a token that was rejected. It overrides any saved login, so unset it"));
+        assertThat(rejected.getMessage()).contains("Qoder 拒绝了这个令牌").contains(".vpc.qoder.com.cn")
+                .doesNotContain("unset");
+
+        // A Qoder address is a Dedicated instance or nothing: any other host would be ignored by the CLI.
+        assertThat(CredentialService.baseUrl("qoder", "https://Acme.vpc.qoder.com.cn/")).isEqualTo("https://Acme.vpc.qoder.com.cn");
+        assertThat(CredentialService.baseUrl("qoder", "")).isNull();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> CredentialService.baseUrl("qoder", "https://qoder.com.cn"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("专属版");
+        assertThat(CredentialService.baseUrl("claude", "https://relay.example")).isEqualTo("https://relay.example");
+
+        java.io.IOException other = new java.io.IOException("--list-models exited with 1: network unreachable");
+        assertThat(ProviderModelFetcher.qoderFailure(other)).isSameAs(other);
+    }
 }

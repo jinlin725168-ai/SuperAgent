@@ -294,8 +294,9 @@ public class CredentialService {
         } else {
             IOException failure = null;
             boolean interrupted = false;
-            // A vendor needs no model: its key proves itself against the endpoint's model list.
-            List<String> tries = candidates.isEmpty() ? java.util.List.of((String) null) : candidates;
+            // A vendor needs no model: its key proves itself against the endpoint's model list. (List.of rejects
+            // the null that stands for "no model", so a key checked before any model is listed must not use it.)
+            List<String> tries = candidates.isEmpty() ? java.util.Collections.singletonList(null) : candidates;
             for (String model : tries) {
                 try {
                     probe.checkKey(c.providerKey(), model, toRun(c));
@@ -390,7 +391,14 @@ public class CredentialService {
     }
 
     public CredentialDto checkNow(String providerKey, String id) {
-        return toDto(check(require(providerKey, id)), current(providerKey).id());
+        ProviderCredential c = require(providerKey, id);
+        String before = current(providerKey).id();
+        ProviderCredential checked = check(c);
+        String now = current(providerKey).id();
+        if (!now.equals(before)) {
+            notifySwitch(providerKey); // the models follow the key runs now use (the sweep won't see this change)
+        }
+        return toDto(checked, now);
     }
 
     private void notifySwitch(String providerKey) {
@@ -425,7 +433,7 @@ public class CredentialService {
         int next = store.list(providerKey).stream().mapToInt(ProviderCredential::priority).max().orElse(0) + 1;
         Instant now = Instant.now();
         ProviderCredential c = new ProviderCredential(UUID.randomUUID().toString(), providerKey, label(req.label(), next),
-                baseUrl(req.baseUrl()), cipher.encrypt(key), bearer(providerKey, req.bearer()), next,
+                baseUrl(providerKey, req.baseUrl()), cipher.encrypt(key), bearer(providerKey, req.bearer()), next,
                 req.enabled() == null || req.enabled(), ProviderCredential.UNKNOWN, null, null, now, now,
                 ProviderCredential.CONSOLE, hash);
         store.save(c);
@@ -439,7 +447,7 @@ public class CredentialService {
         String key = req.apiKey() == null ? "" : req.apiKey().strip();
         ProviderCredential updated = new ProviderCredential(c.id(), providerKey,
                 req.label() == null ? c.label() : label(req.label(), c.priority()),
-                req.baseUrl() == null ? c.baseUrl() : baseUrl(req.baseUrl()),
+                req.baseUrl() == null ? c.baseUrl() : baseUrl(providerKey, req.baseUrl()),
                 key.isEmpty() ? c.keyCipher() : cipher.encrypt(key),
                 req.bearer() == null ? c.bearer() : bearer(providerKey, req.bearer()), c.priority(),
                 req.enabled() == null ? c.enabled() : req.enabled(),
@@ -513,6 +521,21 @@ public class CredentialService {
     }
 
     /** A plain http(s) URL or nothing (the vendor's default). */
+    /**
+     * Qoder's address is only ever an enterprise Dedicated instance. The CLI ignores any other host without a word
+     * and asks the public gateway, which then rejects the token, so a wrong address is refused here, where it's typed.
+     */
+    static String baseUrl(String providerKey, String url) {
+        String u = baseUrl(url);
+        String suffix = com.superagent.runtime.cli.QoderCliAgentRunner.VPC_DOMAIN;
+        if (u != null && "qoder".equals(providerKey)
+                && !URI.create(u).getHost().toLowerCase(java.util.Locale.ROOT).endsWith(suffix)) {
+            throw new IllegalArgumentException("Qoder 的访问地址只用于企业专属版，填组织控制台的地址，形如 https://<实例名>"
+                    + suffix + "；个人版和企业标准版留空：" + u);
+        }
+        return u;
+    }
+
     static String baseUrl(String url) {
         String u = url == null ? "" : url.strip().replaceAll("/+$", "");
         if (u.isEmpty()) {
